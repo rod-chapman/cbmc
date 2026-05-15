@@ -1,0 +1,13 @@
+CORE broken-smt-backend no-new-smt
+main.c
+--smt2 --outfile -
+\(forall \(\(\|main::1::1::j[^|]*\| \(_ BitVec 32\)\)\)
+^EXIT=0$
+^SIGNAL=0$
+--
+:pattern
+^warning: ignoring
+--
+Verify that without `--add-triggers` the SMT2 backend does NOT emit any
+`:pattern` annotations.  Together with `test-with-flag.desc` this pins down
+the on/off behaviour of `--add-triggers`.

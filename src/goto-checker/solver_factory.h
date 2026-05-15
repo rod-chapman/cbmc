@@ -119,6 +119,7 @@ void parse_solver_options(const cmdlinet &cmdline, optionst &options);
   "(refine-arithmetic)"                                                        \
   "(outfile):"                                                                 \
   "(dump-smt-formula):"                                                        \
+  "(add-triggers)"                                                             \
   "(write-solver-stats-to):"
 
 #define HELP_SOLVER                                                            \
@@ -150,6 +151,9 @@ void parse_solver_options(const cmdlinet &cmdline, optionst &options);
   " {y--outfile} {ufilename} \t output formula to given file\n"                \
   " {y--dump-smt-formula} {ufilename} \t "                                     \
   "output smt incremental formula to the given file\n"                         \
+  " {y--add-triggers} \t "                                                     \
+  "emit SMT-LIB :pattern triggers on quantifiers in the SMT2 backend "         \
+  "(useful for Z3)\n"                                                          \
   " {y--write-solver-stats-to} {ujson-file} \t "                               \
   "collect the solver query complexity\n"
 

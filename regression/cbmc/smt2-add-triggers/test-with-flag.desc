@@ -1,0 +1,17 @@
+CORE broken-smt-backend no-new-smt
+main.c
+--smt2 --add-triggers --outfile -
+\(forall \(\(\|main::1::1::j[^|]*\| \(_ BitVec 32\)\)\) \(! .*:pattern \(\(select array\.[0-9]+ \(\(_ zero_extend 32\) \|main::1::1::j[^|]*\|\)\)\)\)\)
+^EXIT=0$
+^SIGNAL=0$
+--
+^warning: ignoring
+--
+Verify that `--add-triggers` causes the non-incremental SMT2 backend to wrap
+the body of every quantifier with `(! BODY :pattern (...))`.  The trigger for
+this harness is the array read `a[j]`, which becomes
+`(select array.<n> ((_ zero_extend 32) |main::1::1::j...|))` in SMT-LIB.
+
+The test only inspects the raw SMT2 output (using `--outfile -`); we tag it
+with `broken-smt-backend` to keep it out of the per-solver test profiles, in
+the same style as `array_of_bool_as_bitvec/test-smt2-outfile.desc`.

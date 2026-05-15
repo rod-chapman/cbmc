@@ -70,6 +70,10 @@ public:
   bool use_datatypes = false;
   bool use_lambda_for_array = false;
   bool emit_set_logic = true;
+  /// When true, the back-end emits SMT-LIB `:pattern` annotations on
+  /// quantified expressions to guide quantifier instantiation in solvers
+  /// such as Z3.  See `--add-triggers`.
+  bool add_pattern_triggers = false;
 
   exprt handle(const exprt &expr) override;
   void set_to(const exprt &expr, bool value) override;
@@ -162,6 +166,18 @@ protected:
   void convert_type(const typet &);
   void convert_literal(const literalt);
   void convert_string_literal(const std::string &);
+
+  /// Collect `:pattern` triggers for a quantified body and emit them on the
+  /// `smt2_convt::out` stream as zero or more `:pattern (TERM ...)` clauses.
+  /// Each trigger is a sub-expression of \p where that mentions every bound
+  /// variable from \p variables.  Currently the implementation only considers
+  /// `index_exprt` sub-expressions (which become SMT-LIB `(select ARR IDX)`
+  /// terms) as candidate triggers, because those are the dominant useful
+  /// triggers in CBMC-generated VCs.  No output is produced if no candidate
+  /// is found, or if `add_pattern_triggers` is false.
+  void emit_quantifier_triggers(
+    const exprt &where,
+    const std::vector<symbol_exprt> &variables);
 
   literalt convert(const exprt &expr);
   tvt l_get(literalt l) const;

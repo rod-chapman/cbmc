@@ -19,6 +19,7 @@ Author: Daniel Kroening, kroening@kroening.com
 #include <util/config.h>
 #include <util/expr_iterator.h>
 #include <util/expr_util.h>
+#include <util/find_symbols.h>
 #include <util/fixedbv.h>
 #include <util/floatbv_expr.h>
 #include <util/format_expr.h>
@@ -1237,6 +1238,95 @@ void smt2_convt::convert_string_literal(const std::string &s)
     out << ch;
   }
   out << '"';
+}
+
+void smt2_convt::emit_quantifier_triggers(
+  const exprt &where,
+  const std::vector<symbol_exprt> &variables)
+{
+  if(!add_pattern_triggers || variables.empty())
+    return;
+
+  // Identifiers of the quantifier's bound variables.
+  std::unordered_set<irep_idt> bound_ids;
+  for(const auto &v : variables)
+    bound_ids.insert(v.get_identifier());
+
+  // True iff `e` has every bound variable from `bound_ids` somewhere in its
+  // sub-tree, ignoring occurrences shadowed by nested bindings.
+  const auto mentions_all_bound = [&](const exprt &e) {
+    for(const auto &id : bound_ids)
+      if(!has_symbol_expr(e, id, /*include_bound_symbols=*/false))
+        return false;
+    return true;
+  };
+
+  // Collect candidate trigger sub-expressions.  We only consider index_exprt
+  // (CBMC's array read), which becomes `(select ARR IDX)` in SMT-LIB and is
+  // by far the most useful trigger shape in CBMC-generated VCs.  Each
+  // candidate must mention every bound variable.
+  std::vector<exprt> candidates;
+  for(auto it = where.depth_begin(), end = where.depth_end(); it != end; ++it)
+  {
+    if(it->id() != ID_index)
+      continue;
+    if(!mentions_all_bound(*it))
+      continue;
+    candidates.push_back(*it);
+  }
+
+  if(candidates.empty())
+    return;
+
+  // Drop a candidate when another candidate properly contains it.  Larger
+  // triggers are more selective and produce fewer instantiations.  Equal
+  // duplicates are also collapsed.
+  const auto is_strict_subexpr_of = [](const exprt &small, const exprt &big) {
+    if(small == big)
+      return false;
+    for(auto it = big.depth_begin(), end = big.depth_end(); it != end; ++it)
+      if(*it == small)
+        return true;
+    return false;
+  };
+  std::vector<exprt> chosen;
+  for(std::size_t i = 0; i < candidates.size(); ++i)
+  {
+    bool dominated = false;
+    for(std::size_t j = 0; j < candidates.size(); ++j)
+    {
+      if(i == j)
+        continue;
+      // Drop equal duplicates: keep the first occurrence only.
+      if(candidates[i] == candidates[j])
+      {
+        if(j < i)
+        {
+          dominated = true;
+          break;
+        }
+        continue;
+      }
+      if(is_strict_subexpr_of(candidates[i], candidates[j]))
+      {
+        dominated = true;
+        break;
+      }
+    }
+    if(!dominated)
+      chosen.push_back(candidates[i]);
+  }
+
+  // Emit one `:pattern (TERM)` per chosen candidate.  We let `convert_expr`
+  // print each term so that the printed SMT-LIB matches the rest of the
+  // formula byte-for-byte (including any inserted typecasts inside index
+  // expressions).
+  for(const auto &c : chosen)
+  {
+    out << " :pattern (";
+    convert_expr(c);
+    out << ')';
+  }
 }
 
 void smt2_convt::convert_expr(const exprt &expr)
@@ -2577,7 +2667,21 @@ void smt2_convt::convert_expr(const exprt &expr)
     }
     out << ") ";
 
-    convert_expr(quantifier_expr.where());
+    if(add_pattern_triggers)
+    {
+      // Wrap the body with an attributed term `(! BODY :pattern (...) ...)`.
+      // The opening `(!` and the closing `)` balance whatever
+      // `emit_quantifier_triggers` writes after `convert_expr` returns.
+      out << "(! ";
+      convert_expr(quantifier_expr.where());
+      emit_quantifier_triggers(
+        quantifier_expr.where(), quantifier_expr.variables());
+      out << ')'; // matches "(!"
+    }
+    else
+    {
+      convert_expr(quantifier_expr.where());
+    }
 
     out << ')';
   }
@@ -5497,7 +5601,10 @@ void smt2_convt::find_symbols(const exprt &expr)
           // use a quantifier-based initialization instead of lambda
           out << "(assert (forall ((i ";
           convert_type(array_type.index_type());
-          out << ")) (= (select " << id << " i) ";
+          out << ")) ";
+          if(add_pattern_triggers)
+            out << "(! ";
+          out << "(= (select " << id << " i) ";
           if(array_type.element_type().id() == ID_bool && !use_array_of_bool)
           {
             out << "(ite ";
@@ -5508,7 +5615,10 @@ void smt2_convt::find_symbols(const exprt &expr)
           {
             convert_expr(array_of.what());
           }
-          out << ")))\n";
+          out << ")";
+          if(add_pattern_triggers)
+            out << " :pattern ((select " << id << " i)))";
+          out << "))\n";
         }
 
         defined_expressions[expr] = id;

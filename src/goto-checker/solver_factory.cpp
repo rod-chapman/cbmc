@@ -538,6 +538,9 @@ solver_factoryt::get_smt2(smt2_dect::solvert solver)
     if(options.get_bool_option("fpa"))
       smt2_dec->use_FPA_theory = true;
 
+    if(options.get_bool_option("add-triggers"))
+      smt2_dec->add_pattern_triggers = true;
+
     return std::make_unique<solvert>(std::move(smt2_dec));
   }
   else if(filename == "-")
@@ -552,6 +555,9 @@ solver_factoryt::get_smt2(smt2_dect::solvert solver)
 
     if(options.get_bool_option("fpa"))
       smt2_conv->use_FPA_theory = true;
+
+    if(options.get_bool_option("add-triggers"))
+      smt2_conv->add_pattern_triggers = true;
 
     return std::make_unique<solvert>(std::move(smt2_conv));
   }
@@ -569,6 +575,9 @@ solver_factoryt::get_smt2(smt2_dect::solvert solver)
 
     if(options.get_bool_option("fpa"))
       smt2_conv->use_FPA_theory = true;
+
+    if(options.get_bool_option("add-triggers"))
+      smt2_conv->add_pattern_triggers = true;
 
     return std::make_unique<solvert>(std::move(smt2_conv), std::move(out));
   }
@@ -632,6 +641,9 @@ static void parse_smt2_options(const cmdlinet &cmdline, optionst &options)
 
   if(cmdline.isset("fpa"))
     options.set_option("fpa", true);
+
+  if(cmdline.isset("add-triggers"))
+    options.set_option("add-triggers", true);
 
   bool solver_set = false;
 
